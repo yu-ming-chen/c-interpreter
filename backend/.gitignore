@@ -1,0 +1,8 @@
+node_modules
+.idea/
+# emacs backup files
+*~
+.DS_Store
+.vscode/
+tsconfig.tsbuildinfo
+test-report.html
