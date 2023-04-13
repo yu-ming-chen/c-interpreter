@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server/server.js",
-    "test": "npx ts-node test/test.ts"
+    "test": "npx ts-node test/test.ts",
+    "clitest": "npx ts-node test/manualTest.ts"
   },
   "author": "",
   "license": "ISC",

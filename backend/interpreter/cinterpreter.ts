@@ -1,5 +1,3 @@
-import * as fs from 'fs'
-
 import { parse } from '../parser/cparser'
 import { print_env, print_memory, printf } from './utils/BuiltinFunctions'
 import { Data, DataSize, DataType, EnvNode, LinkedListNode, ScanData } from './utils/DataTypes'
@@ -2073,12 +2071,3 @@ export const execute = (codeText: string) => {
 
   return S[0].value
 }
-
-// For DEMO
-// const codeText = fs.readFileSync('../test/main.c', 'utf8')
-// try {
-//   const result = execute(codeText)
-//   console.log(result)
-// } catch(e) {
-//   console.log(e.message)
-// }
