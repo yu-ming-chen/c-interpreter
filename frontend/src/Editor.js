@@ -45,11 +45,12 @@ const Editor = () => {
             {showCover && <div className={styles.cover}>
                 <div className={styles.textButtonWrapper}>
                     <div className={styles.infobox}>
-                        <p>C-interpreter on typescript</p>
-                        <p>Created by: </p>
-                        <p>Chen YuMing</p>
-                        <p>David Liew Jing Der</p>
-                        <p>Zhang Anli</p>
+                        <p>This is a C interpreter written in TypeScript to interpret a sublanguage of C.</p>
+                        <div><strong>Created by:</strong><br />
+                            <a href="https://www.linkedin.com/in/yu-ming/">Chen YuMing</a><br />
+                            <a href="https://www.linkedin.com/in/david-liew-398b4b187/">David Liew Jing Der</a><br />
+                            <a href="https://www.linkedin.com/in/zhang-anli/"> Zhang Anli</a><br />
+                        </div>
                     </div>
                     <button onClick={dismissCover}>Continue</button>
                 </div>
