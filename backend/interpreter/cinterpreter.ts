@@ -1,6 +1,6 @@
 import { parse } from '../parser/cparser'
 import { print_env, print_memory, printf } from './utils/BuiltinFunctions'
-import { Data, DataSize, DataType, EnvNode, LinkedListNode, ScanData } from './utils/DataTypes'
+import { Data, DataSize, DataType, EnvNode, LinkedListNode, NULL_POINTER_COUNT, NULL_SIZE, NULL_VAL, ScanData } from './utils/DataTypes'
 import {
   convert_lexeme_to_data,
   convert_to_data_type,
@@ -14,11 +14,6 @@ import {
   type_check
 } from './utils/HelperFunctions'
 
-// Null Values
-const NULL_VAL = undefined
-const NULL_SIZE = undefined
-const NULL_POINTER_COUNT = undefined
-
 // Interpreter Constructs
 const MEMORY_SIZE = 10000
 const M = new Array(MEMORY_SIZE)
@@ -29,25 +24,9 @@ const heap_ll: LinkedListNode = {
   head: { address: S_SIZE, size: H_SIZE, is_occupied: false },
   tail: null
 }
-
 let E: EnvNode | null
 let A: any[]
 let S: any[]
-
-/**
- * Stage: SCAN (INPUT)
- * ScanData[]: {sym: x, type: INT, size: 1, is_stack: T}
- *
- * Stage: Default Value when we recieve syms
- * ===> Data:{value: 1, type: INT}
- * Input: ScanData[], Output: Data[] (default values)
- * {sym: arr, type: INT, size: 3, is_stack: T } ===> [Data:{value: 0, type: INT}, ...]
- * int arr[3] = {1,2,3}
- *
- * Stage: EXTEND (OUTPUT) -> Memory Allocation
- * Input: s_syms: ScanData[], h_syms: ScanData[], s_default_values: any, h_default_values: any, e: EnvNode
- * [ Data | - | - | - | Data | - | - | - | Data | - | - | - | Data | - | - | - | - ]
- */
 
 // SCAN
 const scan_sym = (ast: any, result: any) => {
@@ -86,8 +65,6 @@ const find_primary_expression_for_size = (expr: any): number => {
   }
 }
 
-// TODO: Implement more size scanning capabilities according to grammar
-// We are only supporting the following cases for finding size: int x; int arr[3] = {1,2,3}
 const scan_size = (ast: any, result: any) => {
   if (
     ast.hasOwnProperty('title') &&
@@ -351,7 +328,7 @@ const look_for_free_heap = (size: Data): number => {
 
 const extend_heap = (syms: ScanData[], new_frame: any) => {
   for (let i = 0; i < syms.length; i++) {
-    new_frame[syms[i].sym] = s_fptr // TODO: create the pointer in stack & make sure its undefined
+    new_frame[syms[i].sym] = s_fptr
     M[s_fptr] = {
       value: undefined,
       size: 1,
@@ -360,46 +337,20 @@ const extend_heap = (syms: ScanData[], new_frame: any) => {
       pointer_count: syms[i].pointer_count
     }
     s_fptr += get_data_size(syms[i].type)
-
-    /* dont think need this anymore */
-
-    // if (syms[i].size === 1 || syms[i].pointer_count >= 1) {
-    //   const address = look_for_free_heap(DataSize[syms[i].type])
-    //   M[address] = default_values[i]
-    //   new_frame[syms[i].sym] = address
-    // } else {
-    //   let address = look_for_free_heap(DataSize[syms[i].type] * syms[i].size)
-    //   new_frame[syms[i].sym] = address
-    //   for (let j = 0; j < syms[i].size; j++) {
-    //     M[address] = default_values[i][j]
-    //     address += DataSize[syms[i].type]
-    //   }
-    // }
   }
 }
 
-// malloc steps
-// int ptr* = malloc(8)
-// 1. int ptr* at scan should create the pointer in stack -> change extend_heap to create pointer in stack
-// 2. during interpreter malloc(8) should create the space in heap and return the address
-// 3. assign the address (ptr Data) to the pointer in stack
-
-// 1. malloc will have malloc_size as parameter -> malloc_size
-// for int *ptr = malloc(8)
-// 2. malloc can peek S to get sym (ptr) as it will be a assmt_i pushed on before malloc -> sym
 const assign_heap = (size: Data, e: EnvNode | null) => {
   if (e === null) throw new Error('Error [assign heap]: No env')
-  // const address_in_stack = lookup(sym, E)
-  // const pointer = M[address_in_stack] // Data.value should be undefined at this point
   const sym = peek(S)
-  const pointer_in_stack = get_sym_value(sym) // Data.value should be undefined at this point
-  // TODO: check if it is a pointer first && check if value is null
-  const heap_address = look_for_free_heap(size) // already shifted the heap free ptr & edited the link list
+  const pointer_in_stack = get_sym_value(sym)
+  if (pointer_in_stack.pointer_count == 0) throw new Error('Error [assign heap]: Not a pointer')
+  const heap_address = look_for_free_heap(size)
   if (size.type == DataType.IDENTIFIER) {
     size = get_sym_value(size)
   }
   const malloc_size = size.value
-  const data_length = malloc_size / get_data_size(pointer_in_stack.type) // int *ptr = malloc(24) -> 24/8 = 3 -> array
+  const data_length = malloc_size / get_data_size(pointer_in_stack.type)
 
   //create a new scan data
   const scan_data = {
@@ -422,7 +373,7 @@ const assign_heap = (size: Data, e: EnvNode | null) => {
     pointer_count: 1,
     pos: 0
   }
-  return heap_data // should wrap this in a Data as pointer then assmt_i will take care of the rest
+  return heap_data
 }
 
 const extend_function = (f_syms: ScanData[], new_frame: any) => {
@@ -430,44 +381,8 @@ const extend_function = (f_syms: ScanData[], new_frame: any) => {
     new_frame[f_syms[i].sym] = undefined
   }
 }
-// DELETE
-// const stack_cleanup = (env: EnvNode) => {
-//   // M.fill(undefined, env.stack_ptr, s_fptr)
-// }
 
-// const heap_cleanup = (env: EnvNode) => {
-//   heap_deallocation(env)
-//   heap_compression()
-// }
-
-// const free_heap_node = (address: number) => {
-//   let ptr: LinkedListNode | null = heap_ll
-//   while (ptr != null) {
-//     if (ptr.head.address === address) {
-//       ptr.head.is_occupied = false
-//       return
-//     }
-//     ptr = ptr.tail
-//   }
-// }
-
-// const heap_deallocation = (frame: EnvNode) => {
-//   for (const key of frame.env) {
-//     const address = frame.env[key]
-//     if (address >= S_SIZE) {
-//       const head_data = M[address]
-//       M.fill(undefined, address, address + DataSize[head_data.type] * head_data.size)
-//       free_heap_node(address)
-//     }
-//   }
-// }
-
-// Steps to free
-// int *ptr = malloc(8)
-// free(ptr)
-// go to env and find ptr get heap address
 const heap_free = (address: number) => {
-  // check if address in heap space
   if (address < S_SIZE) throw new Error('Error [Heap Free]: Address is not in heap space')
   let ptr: LinkedListNode | null = heap_ll
   let freed = false
@@ -475,9 +390,7 @@ const heap_free = (address: number) => {
     if (ptr.head.address === address && ptr.head.is_occupied) {
       freed = true
       ptr.head.is_occupied = false
-      // clean M for ptr.head.size starting from address
       M.fill(undefined, address, address + ptr.head.size)
-      // do not clean ptr on stack -> mimic C behavior that can still access the memory after free
       break
     }
     ptr = ptr.tail
@@ -536,9 +449,9 @@ const assign = (sym: Data[], val: Data[], e: EnvNode | null) => {
       if (sym_data_on_stack.type != curr_value.type) {
         throw new Error(
           'Error [Assign - Different type]: Expected:' +
-            sym_data_on_stack.type +
-            ', Received: ' +
-            curr_value.type
+          sym_data_on_stack.type +
+          ', Received: ' +
+          curr_value.type
         )
       }
       const address = lookup(sym[i].value, E) + sym[i].pos * get_data_size(curr_value.type)
@@ -759,85 +672,6 @@ const builtin_mapping = {
     E!.env[ptr.value] = NULL_VAL
     return heap_free(address)
   }
-  // display       : display,
-  // get_time      : get_time,
-  // stringify     : stringify,
-  // error         : error,
-  // prompt        : prompt,
-  // is_number     : is_number,
-  // is_string     : is_string,
-  // is_function   : x => typeof x === 'object' &&
-  //                      (x.tag === 'builtin' ||
-  //                       x.tag === 'closure'),
-  // is_boolean    : is_boolean,
-  // is_undefined  : is_undefined,
-  // parse_int     : parse_int,
-  // char_at       : char_at,
-  // arity         : x => typeof x === 'object'
-  //                      ? x.arity
-  //                      : error(x, 'arity expects function, received:'),
-  // math_abs      : math_abs,
-  // math_acos     : math_acos,
-  // math_acosh    : math_acosh,
-  // math_asin     : math_asin,
-  // math_asinh    : math_asinh,
-  // math_atan     : math_atan,
-  // math_atanh    : math_atanh,
-  // math_atan2    : math_atan2,
-  // math_ceil     : math_ceil,
-  // math_cbrt     : math_cbrt,
-  // math_expm1    : math_expm1,
-  // math_clz32    : math_clz32,
-  // math_cos      : math_cos,
-  // math_cosh     : math_cosh,
-  // math_exp      : math_exp,
-  // math_floor    : math_floor,
-  // math_fround   : math_fround,
-  // math_hypot    : math_hypot,
-  // math_imul     : math_imul,
-  // math_log      : math_log,
-  // math_log1p    : math_log1p,
-  // math_log2     : math_log2,
-  // math_log10    : math_log10,
-  // math_max      : math_max,
-  // math_min      : math_min,
-  // math_pow      : math_pow,
-  // math_random   : math_random,
-  // math_round    : math_round,
-  // math_sign     : math_sign,
-  // math_sin      : math_sin,
-  // math_sinh     : math_sinh,
-  // math_sqrt     : math_sqrt,
-  // math_tanh     : math_tanh,
-  // math_trunc    : math_trunc,
-  // pair          : pair,
-  // is_pair       : is_pair,
-  // head          : head,
-  // tail          : tail,
-  // is_null       : is_null,
-  // set_head      : set_head,
-  // set_tail      : set_tail,
-  // array_length  : array_length,
-  // is_array      : is_array,
-  // list          : list,
-  // is_list       : is_list,
-  // display_list  : display_list,
-  // // from list libarary
-  // equal         : equal,
-  // length        : length,
-  // list_to_string: list_to_string,
-  // reverse       : reverse,
-  // append        : append,
-  // member        : member,
-  // remove        : remove,
-  // remove_all    : remove_all,
-  // enum_list     : enum_list,
-  // list_ref      : list_ref,
-  // // misc
-  // draw_data     : draw_data,
-  // parse         : parse,
-  // tokenize      : tokenize,
-  // apply_in_underlying_javascript: apply_in_underlying_javascript
 }
 
 const microcode = {
@@ -1135,7 +969,7 @@ const microcode = {
       throw new Error('Error [direct_declarator_p]: incorrect number of children')
     }
   },
-  EPSILON: (cmd: any) => {},
+  EPSILON: (cmd: any) => { },
   // enum_specifier
   // enumerator
   // enumerator_list
@@ -1709,7 +1543,7 @@ const microcode = {
     }
   },
   // type_name
-  type_qualifier: (cmd: any) => {},
+  type_qualifier: (cmd: any) => { },
   type_qualifier_list: (cmd: any) => {
     if (cmd.children.length == 2) {
       push(
@@ -1890,7 +1724,7 @@ const microcode = {
         arity: params.length,
         params: params, // ScanData[]
         comp: cmd.comp,
-        env: curr_env_capture
+        env: curr_env_capture  // TODO: Remove environment from closure 
       }
     } else {
       throw new Error('Error [Environment is null]')
@@ -2029,7 +1863,7 @@ const microcode = {
       }
     }
   },
-  mark_i: (cmd: any) => {},
+  mark_i: (cmd: any) => { },
   array_pos_i: (cmd: any) => {
     let pos = S.pop()
     if (pos.type === DataType.IDENTIFIER) {
@@ -2050,8 +1884,7 @@ export const execute = (codeText: string) => {
   let step = 0
   while (step < STEP_LIMIT && A.length > 0) {
     const cmd = A.pop()
-    // console.log('YUMING LOG -- cmd:', cmd)
-    // console.log('YUMING LOG -- S:', S)
+    // console.log('YUMING LOG -- cmd:', cmd);
     // console.log("YUMING LOG -- S:", S);
     // console.log("YUMING LOG -- A:", A);
     // console.log("YUMING LOG -- E:", E);

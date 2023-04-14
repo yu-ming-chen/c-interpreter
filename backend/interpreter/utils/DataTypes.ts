@@ -29,6 +29,11 @@ export enum DataType {
   IDENTIFIER = 'IDENTIFIER'
 }
 
+// Null Values
+export const NULL_VAL = undefined
+export const NULL_SIZE = undefined
+export const NULL_POINTER_COUNT = undefined
+
 export const DataSize = {
   CHAR: 8,
   INT: 8,

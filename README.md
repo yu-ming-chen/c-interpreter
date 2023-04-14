@@ -66,7 +66,6 @@ We have also created test cases to test our interpreter. To run our test cases, 
 3. You should see all the test cases pass.
 4. To view individual test cases, navigate to the `backend/test/` directory and open the `test.ts` file.
 
-
 ## Team
 
 This project is developed by the following team members:

@@ -169,8 +169,6 @@ const tests: TestData = [
       free(ptr);
       return *ptr;
   }`, Error('Error [Use After Free]: ptr')]
-
-
 ]
 
 tests.forEach((curr, index) => {

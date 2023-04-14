@@ -188,3 +188,116 @@
 // }
 
 /*-----------------------------------------------*/
+/* NEW */
+
+//while loop
+// unit test: while loop -> 5
+// int main() {
+// 	int x = 0;
+// 	while(x < 5) {
+// 		x++;
+// 	}
+// 	return x;
+// }
+
+// unit test: while loop with break -> 1
+// int main() {
+// 	int x = 0;
+// 	while(x < 5) {
+// 		x++;
+// 		break;
+// 	}
+// 	return x;
+// }
+
+// unit test: while loop with continue -> 4
+// int main() {
+// 	int x = 0;
+// 	int i = 0;
+// 	while(i < 5) {
+// 		i++;
+// 		if(i == 2) continue;
+// 		x++;
+// 	}
+// 	return x;
+// }
+
+// integration test: while loop with function call -> 50
+// int f(int a, int b) {
+// 	return a * b;
+// }
+
+// int main() {
+// 	int x = 0;
+// 	int i = 0;
+// 	while(i < 5) {
+// 		x += f(2, 5);
+//         i++;
+// 	}
+// 	return x;
+// }
+
+// integration test: while loop with array -> 50
+// int main() {
+// 	int arr[5] = {1, 2, 3, 4, 5};
+// 	int i = 0;
+// 	while(i < 5) {
+// 		arr[i] *= 10;
+//         i++;
+// 	}
+// 	return arr[4];
+// }
+
+// integration test: while loop with malloc and free -> 50
+// int main() {
+// 	int x = 0;
+// 	int i = 0;
+// 	while(i < 5) {
+// 		int *ptr = malloc(8);
+// 		*ptr = 10;
+// 		x = x + *ptr; // TODO: change to x += *ptr
+// 		free(ptr);
+// 		i++;
+// 	}
+// 	return x;
+// }
+
+// unit test: if block -> 5
+// int main() {
+//     int x = 0;
+// 	if(1) x += 1;
+// 	if(1) x += 1;
+// 	if(1) x += 1;
+// 	if(1) x += 1;
+// 	if(1) x += 1;
+// 	if(0) x += 1; // do not add
+//     return x;
+// }
+
+// unit test: else if block -> 2
+// int main() {
+//     int x = 0;
+// 	if(0) {
+//         x += 1;
+//     } else if (1) {
+//         x += 2;
+//     } else {
+//         x += 3;
+//     }
+//     return x;
+// }
+
+// unit test: else block -> 3
+// int main() {
+//     int x = 0;
+// 	if(0) {
+//         x += 1;
+//     } else if (0) {
+//         x += 2;
+//     } else {
+//         x += 3;
+//     }
+//     return x;
+// }
+
+
