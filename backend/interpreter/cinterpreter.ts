@@ -1,6 +1,6 @@
 import { parse } from '../parser/cparser'
 import { print_env, print_memory, printf } from './utils/BuiltinFunctions'
-import { Data, DataSize, DataType, EnvNode, LinkedListNode, NULL_POINTER_COUNT, NULL_SIZE, NULL_VAL, ScanData } from './utils/DataTypes'
+import { Data, DataSize, DataType, EnvNode, LinkedListNode, NULL_SIZE, NULL_VAL, ScanData } from './utils/DataTypes'
 import {
   convert_lexeme_to_data,
   convert_to_data_type,
@@ -20,13 +20,14 @@ const M = new Array(MEMORY_SIZE)
 const S_SIZE = MEMORY_SIZE / 2
 const H_SIZE = MEMORY_SIZE / 2
 let s_fptr = 0
-const heap_ll: LinkedListNode = {
+let heap_ll: LinkedListNode = {
   head: { address: S_SIZE, size: H_SIZE, is_occupied: false },
   tail: null
 }
 let E: EnvNode | null
 let A: any[]
 let S: any[]
+let global_env_ref: EnvNode | null
 
 // SCAN
 const scan_sym = (ast: any, result: any) => {
@@ -116,7 +117,7 @@ const scan_pointer = (ast: any, result: any) => {
     }
   } else if (
     ast.hasOwnProperty('tokenClass') ||
-    (ast.hasOwnProperty('children') && scan_skip_set.has(ast.title))
+    (ast.hasOwnProperty('title') && scan_skip_set.has(ast.title))
   ) {
     return
   } else if (ast.hasOwnProperty('children') && !ast.hasOwnProperty('lexeme')) {
@@ -160,7 +161,7 @@ const scan_function_definition = (func_definition: any): ScanData => {
 
 const scan = (ast: any, result: any, is_first_scan: boolean) => {
   // Stop conditions
-  if ((!ast.hasOwnProperty('title') || ast.title === 'compound_stmt') && !is_first_scan) {
+  if ((!ast.hasOwnProperty('title') || scan_skip_set.has(ast.title)) && !is_first_scan) {
     return
   }
 
@@ -228,8 +229,7 @@ const extend_environment = (cmd: any, env: EnvNode | null) => {
   const h_syms = s_h_scan_data[1]
   const f_syms = s_h_scan_data[2]
   const s_def_val = generate_default_values(s_syms)
-  const h_def_val = generate_default_values(h_syms)
-  E = extend(s_syms, s_def_val, h_syms, h_def_val, f_syms, env)
+  E = extend(s_syms, s_def_val, h_syms, f_syms, env)
 }
 
 const extend_and_assign_params_to_environment = (params: ScanData[], args: Data[]) => {
@@ -251,7 +251,6 @@ const extend = (
   s_syms: ScanData[],
   s_default_values: Data[][],
   h_syms: ScanData[],
-  h_default_values: Data[][],
   f_syms: ScanData[],
   e: EnvNode | null
 ) => {
@@ -358,7 +357,8 @@ const assign_heap = (size: Data, e: EnvNode | null) => {
     type: pointer_in_stack.type,
     size: data_length,
     is_stack: false,
-    is_function: false
+    is_function: false,
+    pointer_count: 0
   } as ScanData
 
   const default_vals = convert_sym_to_default_val(scan_data)
@@ -370,8 +370,8 @@ const assign_heap = (size: Data, e: EnvNode | null) => {
     value: heap_address,
     type: pointer_in_stack.type,
     size: scan_data.size,
-    pointer_count: 1,
-    pos: 0
+    pos: 0,
+    pointer_count: 1
   }
   return heap_data
 }
@@ -412,27 +412,16 @@ const heap_compression = () => {
   }
 }
 
-/**
- * Lookup returns the base address of the variable, even if it is an array.
- * For e.g. lookup(arr) returns arr[0] memory address.
- */
 export const lookup: any = (sym: string, e: EnvNode) => {
   if (e === null) {
     throw new Error('Error [Lookup - Unbound Name]: ' + sym)
   } else if (e.env.hasOwnProperty(sym)) {
-    // TODO: possible change to another place to check for use after free
-    if (e.env[sym] === NULL_VAL) throw new Error('Error [Use After Free]: ' + sym)
     return e.env[sym]
   } else {
     return lookup(sym, e.parent)
   }
 }
 
-/**
- * Assigns value in M at the corresponding addresses with actual Data struct value
- * @param sym Expects sym representing one variable/ one array.
- * @param val Expects values wrapped in Data[]. Single variable: [Data]; Array: [Data, Data, Data]
- */
 const assign = (sym: Data[], val: Data[], e: EnvNode | null) => {
   if (e === null) {
     throw new Error('Error [Assign - Unbound Name]: ' + sym)
@@ -445,6 +434,9 @@ const assign = (sym: Data[], val: Data[], e: EnvNode | null) => {
       const sym_data_on_stack = get_sym_value(sym[i])
       if (curr_value.type === DataType.IDENTIFIER) {
         curr_value = get_sym_value(curr_value)
+      } else if (curr_value.hasOwnProperty('is_heap')) {
+        const address = curr_value.value + curr_value.pos * get_data_size(curr_value.type)
+        curr_value = M[address]
       }
       if (sym_data_on_stack.type != curr_value.type) {
         throw new Error(
@@ -453,12 +445,14 @@ const assign = (sym: Data[], val: Data[], e: EnvNode | null) => {
           ', Received: ' +
           curr_value.type
         )
+      } else if (sym_data_on_stack.pointer_count != curr_value.pointer_count) {
+        throw new Error('Error [Assign - Different pointer count]')
       }
       const address = lookup(sym[i].value, E) + sym[i].pos * get_data_size(curr_value.type)
       M[address].value = curr_value.value
     }
   } else if (sym[0].hasOwnProperty('is_heap')) {
-    const address = sym[0].value
+    const address = sym[0].value + sym[0].pos * get_data_size(sym[0].type)
     M[address].value = val[0].value
   } else {
     assign(sym, val, e.parent)
@@ -466,6 +460,9 @@ const assign = (sym: Data[], val: Data[], e: EnvNode | null) => {
 }
 
 export const get_sym_value = (sym: Data) => {
+  if (sym.pointer_count > 0 && sym.value >= S_SIZE) {
+    return M[sym.value + sym.pos * get_data_size(sym.type)]
+  }
   const address = lookup(sym.value, E)
   const head_data = M[address]
   return M[address + sym.pos * get_data_size(head_data.type)]
@@ -497,13 +494,12 @@ const apply_unop = (op: string, v1: Data) => {
   return unop_microcode[op](v1)
 }
 
-// Note: We only support (Int, Int), not (Int, Double) calculations.
 const apply_binop = (op: string, v2: Data, v1: Data) => {
   if (v1.type === DataType.IDENTIFIER) v1 = get_sym_value(v1)
   if (v2.type === DataType.IDENTIFIER) v2 = get_sym_value(v2)
 
-  if (v1.hasOwnProperty('is_heap')) v1 = M[v1.value]
-  if (v2.hasOwnProperty('is_heap')) v2 = M[v2.value]
+  if (v1.hasOwnProperty('is_heap')) v1 = M[v1.value + v1.pos * get_data_size(v1.type)]
+  if (v2.hasOwnProperty('is_heap')) v2 = M[v2.value + v2.pos * get_data_size(v2.type)]
 
   // Type checking
   if (v1.value == NULL_VAL || v2.value == NULL_VAL)
@@ -515,7 +511,6 @@ const apply_binop = (op: string, v2: Data, v1: Data) => {
 
 const apply_builtin = (builtin_symbol: any, args: any) => builtin_mapping[builtin_symbol](...args)
 
-// Note: Only operating on CONSTANTS. Does not support identifiers as they are resolved on Agenda (A).
 const binop_microcode = {
   '+': (x: Data, y: Data) => {
     type_check([DataType.CHAR, DataType.INT, DataType.DOUBLE], x.type, y.type)
@@ -531,7 +526,7 @@ const binop_microcode = {
   },
   '/': (x: Data, y: Data) => {
     type_check([DataType.INT, DataType.DOUBLE], x.type, y.type)
-    return { value: x.value / y.value, type: x.type, size: 1, pointer_count: 0 }
+    return { value: x.type === DataType.INT ? Math.floor(x.value / y.value) : x.value / y.value, type: x.type, size: 1, pointer_count: 0 }
   },
   '%': (x: Data, y: Data) => {
     type_check([DataType.INT, DataType.DOUBLE], x.type, y.type)
@@ -590,7 +585,7 @@ const binop_microcode = {
     return { value: x.value || y.value ? 1 : 0, type: DataType.INT, size: 1, pointer_count: 0 }
   }
 }
-// Note: Supports CONSTANTS and IDENTIFIERS. TODO: STRING_LITERAL.
+
 const unop_microcode = {
   '++': (x: Data) => {
     type_check([DataType.IDENTIFIER], x.type)
@@ -601,7 +596,8 @@ const unop_microcode = {
         value: x.value + get_data_size(x.type),
         type: x.type,
         size: 1,
-        pointer_count: x.pointer_count
+        pointer_count: x.pointer_count,
+        pos: x.pos
       }
     }
 
@@ -617,7 +613,8 @@ const unop_microcode = {
         value: x.value - get_data_size(x.type),
         type: x.type,
         size: 1,
-        pointer_count: x.pointer_count
+        pointer_count: x.pointer_count,
+        pos: x.pos
       }
     }
 
@@ -640,12 +637,15 @@ const unop_microcode = {
     const ptr_data = get_sym_value(x)
 
     if (ptr_data.value >= S_SIZE) {
+      const maybe_heap = M[ptr_data.value + ptr_data.pos * get_data_size(ptr_data.type)]
+      if (!maybe_heap) throw new Error('Error [Use After Free]: ' + x.value)
       return {
         value: ptr_data.value,
         type: ptr_data.type,
         size: 1,
         pointer_count: ptr_data.pointer_count,
-        is_heap: true
+        is_heap: true,
+        pos: 0
       }
     }
     const sym_address = ptr_data.value
@@ -658,7 +658,13 @@ const unop_microcode = {
     type_check([DataType.INT, DataType.IDENTIFIER], x.type)
     if (x.type === DataType.IDENTIFIER) x = get_sym_value(x)
     if (x.value === NULL_VAL) throw new Error('Type Error [UNOP - Use before initialisation]')
-    return { value: x.value === 0 ? 1 : 0, type: DataType.INT, size: 1, pointer_count: 0 }
+    return { value: x.value === 0 ? 1 : 0, type: DataType.INT, size: 1, pointer_count: 0, pos: 0 }
+  },
+  '-': (x: Data) => {
+    type_check([DataType.INT, DataType.DOUBLE, DataType.IDENTIFIER], x.type)
+    if (x.type === DataType.IDENTIFIER) x = get_sym_value(x)
+    if (x.value === NULL_VAL) throw new Error('Type Error [UNOP - Use before initialisation]')
+    return { value: -x.value, type: x.type, size: 1, pointer_count: 0, pos: 0 }
   }
 }
 
@@ -668,15 +674,13 @@ const builtin_mapping = {
   printf: (...args: any[]) => printf(E, M, ...args),
   malloc: (size: Data) => assign_heap(size, E),
   free: (ptr: Data) => {
-    const address = get_sym_value(ptr).value
-    E!.env[ptr.value] = NULL_VAL
+    const address = ptr.value
     return heap_free(address)
   }
 }
 
 const microcode = {
   // -------------- Expressions --------------
-  // abstract_declarator:
   additive_expr: (cmd: any) => {
     if (cmd.children.length === 2) {
       push(
@@ -728,7 +732,6 @@ const microcode = {
     }
   },
   argument_expr_list: (cmd: any) => {
-    // 1,2,3
     if (cmd.children.length === 2) {
       push(A, cmd.children[1], cmd.children[0])
     } else {
@@ -796,16 +799,8 @@ const microcode = {
     }
   },
   cast_expr: (cmd: any) => {
-    // TODO: Type casting
     if (cmd.children.length === 1) {
       push(A, cmd.children[0]) // unary_expr
-    } else if (cmd.children.length === 4) {
-      push(
-        A,
-        { title: 'cast_i' },
-        cmd.children[3], // cast_expr
-        cmd.children[1] // type_name
-      )
     } else {
       throw new Error('Error [cast_expr]: Unexpected Child Length')
     }
@@ -891,49 +886,13 @@ const microcode = {
       throw new Error('Error [Declarator]: Unexpected Child Length')
     }
   },
-  designation: (cmd: any) => {
-    if (cmd.children.length === 2) {
-      push(A, cmd.children[0])
-    } else {
-      throw new Error('Error [designation]: Unexpected Child Length')
-    }
-  },
-  designator_list: (cmd: any) => {
-    if (cmd.children.length === 2) {
-      push(
-        A,
-        cmd.children[1], // designator_list_p
-        cmd.children[0] // designator
-      )
-    } else {
-      throw new Error('Error [designator_list]: Unexpected Child Length')
-    }
-  },
-  designator_list_p: (cmd: any) => {
-    if (cmd.children.length === 1) {
-      push(A, cmd.children[0]) // EPSILON
-    } else if (cmd.children.length === 2) {
-      push(
-        A,
-        cmd.children[1], // designator_list_p
-        cmd.children[0] // designator
-      )
-    } else {
-      throw new Error('Error [designator_list_p]: Unexpected Child Length')
-    }
-  },
-  designator: (cmd: any) => {
-    throw new Error('Error [designator]: Not yet implemented')
-  },
-  // direct_abstract_declarator
-  // direct_abstract_declarator_p
   direct_declarator: (cmd: any) => {
     if (cmd.children.length === 2) {
       push(S, {
         value: cmd.children[0].lexeme,
         type: DataType.IDENTIFIER,
         size: NULL_SIZE,
-        pointer_count: NULL_POINTER_COUNT,
+        pointer_count: 0,
         pos: 0
       }) // IDENTIFIER
       push(A, cmd.children[1]) // direct_declarator_p
@@ -948,7 +907,6 @@ const microcode = {
     }
   },
   direct_declarator_p: (cmd: any) => {
-    // TODO: 2D Array ?
     if (cmd.children.length === 1) {
       push(A, cmd.children[0]) // EPSILON
     } else if (
@@ -970,10 +928,6 @@ const microcode = {
     }
   },
   EPSILON: (cmd: any) => { },
-  // enum_specifier
-  // enumerator
-  // enumerator_list
-  // enumerator_list_p
   equality_expr: (cmd: any) => {
     if (cmd.children.length === 2) {
       push(
@@ -1077,7 +1031,6 @@ const microcode = {
       throw new Error('Error [function_definition]: incorrect number of children')
     }
   },
-  // function_specifier
   identifier_list: (cmd: any) => {
     push(A, cmd.children[1], cmd.children[0])
   },
@@ -1119,12 +1072,11 @@ const microcode = {
       scan_sym(cmd.children[0], sym_obj)
       set_default_value(lookup(sym_obj.sym, E), M)
     } else if (cmd.children.length === 3) {
-      // int x = 0;
       push(
         A,
         { title: 'assmt_i', op: '=' },
-        cmd.children[2], // initializer -> expr (2)
-        cmd.children[0] // declarator -> sym
+        cmd.children[2], // initializer
+        cmd.children[0] // declarator
       )
       push(S, { marker: 'assmt_marker' })
     } else {
@@ -1209,12 +1161,12 @@ const microcode = {
           value: undefined,
           type: DataType.VOID,
           size: 1,
-          pointer_count: NULL_POINTER_COUNT
+          pointer_count: 0
         })
         push(
           A,
-          { title: 'while_i', pred: cmd.children[2], body: cmd.children[4] }, // body: compound_stmt -> will extend_env
-          cmd.children[2] // expr (predicate)
+          { title: 'while_i', pred: cmd.children[2], body: cmd.children[4] },
+          cmd.children[2] // expr
         )
         break
       case 'FOR':
@@ -1222,15 +1174,17 @@ const microcode = {
           value: undefined,
           type: DataType.VOID,
           size: 1,
-          pointer_count: NULL_POINTER_COUNT
+          pointer_count: 0
         })
         const E_parent = E
-        extend_environment(cmd, E) // TODO: Compress 2 frames into 1 frame
+        extend_environment(cmd, E)
         push(
           A,
           { title: 'env_i', env: E_parent },
           { title: 'for_i', pred: cmd.children[3], iter: cmd.children[4], body: cmd.children[6] },
-          cmd.children[3]
+          cmd.children[3],
+          { title: 'pop_i' },
+          cmd.children[2],
         )
         break
     }
@@ -1245,7 +1199,6 @@ const microcode = {
       throw new Error('Error [jump_stmt]: incorrect number of children')
     }
   },
-  // labeled_stmt
   logical_and_expr: (cmd: any) => {
     if (cmd.children.length === 2) {
       push(
@@ -1327,7 +1280,7 @@ const microcode = {
     } else if (cmd.children.length === 2) {
       push(
         A,
-        cmd.children[1], // declarator // David's interesting comment -> Pointer (Dont push, useless)
+        cmd.children[1], // declarator
         cmd.children[0] // declaration_specifiers
       )
     } else {
@@ -1390,20 +1343,20 @@ const microcode = {
     if (cmd.children.length === 1) {
       push(A, cmd.children[0]) // EPSILON
     } else if (cmd.children.length === 2) {
-      const primary_expr_sym = S.pop()
-      push(S, { marker: 'assmt_marker' }, primary_expr_sym, primary_expr_sym)
+      const primary_expr_sym = S.pop() // x
+      const lookup_val = { ...get_sym_value(primary_expr_sym) }
+      push(S, lookup_val, { marker: 'assmt_marker' }, primary_expr_sym, primary_expr_sym)
       push(
         A,
+        { title: 'pop_i' },
         { title: 'assmt_i', op: '=' },
-        { title: 'unop_i', op: cmd.children[0].lexeme } // INC_OP | DEC_OP
+        { title: 'unop_i', op: cmd.children[0].lexeme }, // INC_OP | DEC_OP
       )
     } else if (cmd.children.length === 3) {
       switch (cmd.children[0].tokenClass) {
         case '(':
           push(A, { title: 'function_app_i', arity: 0 })
           break
-        case 'PTR_OP': //PTR_OP IDENTIFIER postfix_expr_p
-        // TODO: PTR OP
       }
     } else if (cmd.children.length === 4) {
       switch (cmd.children[0].tokenClass) {
@@ -1500,7 +1453,6 @@ const microcode = {
       throw new Error('Error [shift_expr_p]: incorrect number of children')
     }
   },
-  // specifier_qualifier_list
   stmt: (cmd: any) => {
     if (cmd.children.length === 1) {
       push(A, cmd.children[0]) // compound_stmt|expression_stmt|selection_stmt|iteration_stmt|jump_stmt
@@ -1508,17 +1460,9 @@ const microcode = {
       throw new Error('Error [stmt]: incorrect number of children')
     }
   },
-  // storage_class_specifier
-  // struct_declaration
-  // struct_declaration_list
-  // struct_declaration_list_p
-  // struct_declarator
-  // struct_declarator_list
-  // struct_declarator_list_p
-  // struct_or_union
-  // struct_or_union_specifier
   translation_unit: (cmd: any) => {
     extend_environment(cmd, E)
+    global_env_ref = E;
     if (cmd.children.length === 2) {
       push(
         A,
@@ -1542,7 +1486,6 @@ const microcode = {
       throw new Error('Error [translation_unit_p]: incorrect number of children')
     }
   },
-  // type_name
   type_qualifier: (cmd: any) => { },
   type_qualifier_list: (cmd: any) => {
     if (cmd.children.length == 2) {
@@ -1577,7 +1520,7 @@ const microcode = {
         value: NULL_VAL,
         type: type,
         size: NULL_SIZE,
-        pointer_count: NULL_POINTER_COUNT
+        pointer_count: 0
       }
       push(S, data)
     } else {
@@ -1588,12 +1531,11 @@ const microcode = {
     if (cmd.children.length === 1) {
       push(A, cmd.children[0]) // postfix_expr
     } else if (cmd.children.length === 2) {
-      if (cmd.children[0].lexeme === 'INC_OP' || cmd.children[0].lexeme === 'DEC_OP') {
+      if (cmd.children[0].lexeme === '++' || cmd.children[0].lexeme === '--') {
         push(
-          A, // TODO: x = ++y
-          { title: 'unop_i', op: cmd.children[0].lexeme }, // INC_OP | DEC_OP
-          cmd.children[1], // unary_expr
+          A,
           { title: 'assmt_i', op: '=' },
+          { title: 'swap_i' },
           cmd.children[1], // unary_expr
           { title: 'unop_i', op: cmd.children[0].lexeme }, // INC_OP | DEC_OP
           cmd.children[1] // unary_expr
@@ -1624,11 +1566,11 @@ const microcode = {
       value: NULL_VAL,
       type: DataType.VOID,
       size: NULL_SIZE,
-      pointer_count: NULL_POINTER_COUNT
+      pointer_count: 0
     })
   },
   assmt_i: (cmd: any) => {
-    const values = []
+    const values: any = []
     while (!(peek(S).hasOwnProperty('marker') && peek(S).marker === 'assmt_marker')) {
       values.push(S.pop())
     }
@@ -1642,6 +1584,11 @@ const microcode = {
       }
     } else {
       syms.push(sym)
+    }
+    for (let i = 0; i < values.length; i++) {
+      if (values[i].type === DataType.IDENTIFIER) {
+        values[i] = {...get_sym_value(values[i])}
+      }
     }
     if (values.length === 1) {
       switch (cmd.op) {
@@ -1678,7 +1625,7 @@ const microcode = {
     if (values.length === 1) {
       push(S, values[0])
     } else {
-      push(S, values[values.length - 1]) // TODO: If we assigned an array, what is the last value we push?
+      push(S, values[values.length - 1])
     }
   },
   pop_i: () => S.pop(),
@@ -1717,14 +1664,12 @@ const microcode = {
     const fn_return_type = params[params.length - 1].type // function return type
     params = params.slice(0, params.length - 1)
     if (E != null) {
-      const curr_env_capture = E
       E.env[fn_name] = {
         title: 'closure',
         return_type: fn_return_type,
         arity: params.length,
-        params: params, // ScanData[]
-        comp: cmd.comp,
-        env: curr_env_capture  // TODO: Remove environment from closure 
+        params: params,
+        comp: cmd.comp
       }
     } else {
       throw new Error('Error [Environment is null]')
@@ -1735,7 +1680,9 @@ const microcode = {
     const args: Data[] = []
 
     for (let i = 0; i < function_call_arity; i++) {
-      args.push(S.pop())
+      let curr = S.pop()
+      if (curr.type === DataType.IDENTIFIER) curr = get_sym_value(curr)
+      args.push(curr)
     }
     const function_name = S.pop()
     if (builtin_mapping.hasOwnProperty(function_name.value)) {
@@ -1746,7 +1693,7 @@ const microcode = {
       const function_body = closure.comp // compound_statement
       const function_params = closure.params // array we created
       const E_curr = E
-      extend_environment(function_body, closure.env) // -> E
+      extend_environment(function_body, global_env_ref)
       function_params.reverse()
       args.reverse()
       extend_and_assign_params_to_environment(function_params, args)
@@ -1778,7 +1725,7 @@ const microcode = {
     S.pop().value ? push(A, cmd, cmd.pred, { title: 'pop_i' }, cmd.body) : null
   },
   for_i: (cmd: any) => {
-    S.pop().value ? push(A, cmd, cmd.pred, cmd.iter, { title: 'pop_i' }, cmd.body) : null
+    S.pop().value ? push(A, cmd, cmd.pred, { title: 'pop_i' }, cmd.iter, { title: 'pop_i' }, cmd.body) : null
   },
   swap_i: (cmd: any) => {
     if (S.length >= 2) {
@@ -1788,21 +1735,6 @@ const microcode = {
       S.push(second)
     } else {
       throw new Error('Error [swap_i]: Stack shorter than length 2')
-    }
-  },
-  throw_i: (cmd: any) => {
-    // TODO:
-    const next = A.pop()
-    if (next.title === 'catch_i') {
-      // catch found?
-      const catch_cmd = next // stop loop
-      push(A, { title: 'env_i', env: catch_cmd.env }, catch_cmd.catch)
-      const E_parent = E
-      extend_environment(catch_cmd, E)
-      // E = extend([catch_cmd.sym], [S.pop()], catch_cmd.env)
-    } else {
-      // continue loop by pushing same
-      push(A, cmd) // throw_i instruction back on agenda
     }
   },
   jump_stmt_i: (cmd: any) => {
@@ -1846,7 +1778,7 @@ const microcode = {
       const output = peek(S)
       if (output.hasOwnProperty('is_heap')) {
         S.pop()
-        push(S, M[output.value])
+        push(S, M[output.value + output.pos * get_data_size(output.type)])
       } else if (output.type === DataType.IDENTIFIER) {
         S.pop()
         push(S, get_sym_value(output))
@@ -1871,6 +1803,22 @@ const microcode = {
     }
     const sym = S.pop()
     sym.pos = pos.value
+
+    const look_up_address = lookup(sym.value, E)
+    const maybe_heap_ptr_on_stack = M[look_up_address]
+    if (maybe_heap_ptr_on_stack.pointer_count > 0 && maybe_heap_ptr_on_stack.value >= S_SIZE) {
+      const maybe_heap = M[maybe_heap_ptr_on_stack.value + pos.value * get_data_size(maybe_heap_ptr_on_stack.type)]
+      if (maybe_heap === undefined) throw new Error('Error [Use After Free]: ' + sym.value)
+      push(S, {
+        value: maybe_heap_ptr_on_stack.value,
+        type: maybe_heap_ptr_on_stack.type,
+        size: 1,
+        pointer_count: maybe_heap_ptr_on_stack.pointer_count,
+        is_heap: true,
+        pos: pos.value
+      })
+      return
+    }
     push(S, sym)
   }
 }
@@ -1880,14 +1828,15 @@ export const execute = (codeText: string) => {
   A = [{ title: 'function_app_i', arity: 0 }, parse(codeText)]
   S = [{ value: 'main', type: 'IDENTIFIER' }]
   E = null
+  s_fptr = 0
+  heap_ll = {
+    head: { address: S_SIZE, size: H_SIZE, is_occupied: false },
+    tail: null
+  }
   const STEP_LIMIT = 100000
   let step = 0
   while (step < STEP_LIMIT && A.length > 0) {
     const cmd = A.pop()
-    // console.log('YUMING LOG -- cmd:', cmd);
-    // console.log("YUMING LOG -- S:", S);
-    // console.log("YUMING LOG -- A:", A);
-    // console.log("YUMING LOG -- E:", E);
     if (microcode.hasOwnProperty(cmd.title)) {
       microcode[cmd.title](cmd)
     } else {
@@ -1901,6 +1850,5 @@ export const execute = (codeText: string) => {
   if (S.length != 1) {
     throw new Error('Error [Incorrect S length]: ' + S.length)
   }
-
   return S[0].value
 }

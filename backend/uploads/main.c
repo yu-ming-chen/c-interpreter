@@ -1,8 +1,9 @@
-int fib(int x) {
-    if(x <= 1) return x;
-    return fib(x - 1) + fib(x - 2);
-}
-
+// Type your C code here...
 int main() {
-    return fib(10);
+    int x = 0;
+    for(int i = 0; i < 5; i++) {
+        x += i;
+        print_memory();
+    }
+    return x;
 }

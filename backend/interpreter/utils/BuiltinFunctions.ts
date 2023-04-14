@@ -12,6 +12,7 @@ export const print_memory = (env: EnvNode | null, M: any): void => {
       const possible_heap_ptr = M[address]
       if (possible_heap_ptr.pointer_count > 0 && possible_heap_ptr.value >= S_SIZE) {
         let data_on_heap = M[possible_heap_ptr.value]
+        if (data_on_heap === undefined) continue
         const heap_address = possible_heap_ptr.value
         const size = data_on_heap.size * get_data_size(data_on_heap.type)
         for (let i = heap_address; i < heap_address + size; i += word_size) {
@@ -79,6 +80,7 @@ export const print_env = (env: EnvNode | null): void => {
   }
 }
 
+// FUTURE EXTENTION
 // export const printf = (format: string, ...args: any[]): void => {
 //   let i = 0;
 //   const regex = /%[sdf]/g;

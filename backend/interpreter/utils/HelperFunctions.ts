@@ -4,7 +4,8 @@ import { Data, DataType } from './DataTypes'
 export const scan_skip_set = new Set<string>([
   'compound_stmt',
   'parameter_type_list',
-  'initializer'
+  'initializer',
+  'iteration_stmt'
 ])
 
 // Helper Functions
@@ -52,18 +53,16 @@ export const convert_lexeme_to_data = (lexeme_struct: any) => {
         pos: 0,
         pointer_count: 0
       }
-    // case 'STRING_LITERAL':
-    //   return new Data(lexeme_struct.lexeme, DataType.STRING_LITERAL)
     case 'CONSTANT':
       const data = lexeme_struct.lexeme
       if (isNaN(Number(data))) {
-        return { value: data, type: DataType.CHAR, size: 1 }
+        return { value: data, type: DataType.CHAR, size: 1, pos: 0, pointer_count: 0}
       } else if (Number.isInteger(Number(data)) && !data.includes('.')) {
-        return { value: Number(data), type: DataType.INT, size: 1, pointer_count: 0 }
+        return { value: Number(data), type: DataType.INT, size: 1, pos: 0, pointer_count: 0 }
       } else {
-        return { value: Number(data), type: DataType.DOUBLE, size: 1, pointer_count: 0 }
+        return { value: Number(data), type: DataType.DOUBLE, size: 1, pos: 0, pointer_count: 0 }
       }
-    default: // TYPE DATA e.g. 'int
+    default:
       throw new Error('Invalid data type')
   }
 }
