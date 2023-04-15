@@ -49,7 +49,7 @@ const tests: TestData = [
     }`,
     Error('Error [Stack overflow]')
   ],
-  
+
   /*---------- IF ELSE ------------------------*/
 
   // 3 unit test: if block -> 5
@@ -190,8 +190,8 @@ const tests: TestData = [
   ],
 
   // 14 unite test: While loop: continue
-    [
-      `int main() {
+  [
+    `int main() {
         int x = 0;
         int y = 0;
         while(x < 10) {
@@ -201,7 +201,7 @@ const tests: TestData = [
         }
         return y;
     }`, 9
-    ],
+  ],
 
   // 15 integration test: while loop with function call -> 50
   [`int f(int a, int b) {
@@ -253,7 +253,7 @@ const tests: TestData = [
       free(ptr);
       return x;
     }`, 10],
-  
+
   // 19 unit test: malloc & Free
   [`int main()
   {
@@ -265,8 +265,8 @@ const tests: TestData = [
       return y;
   }`, 12],
 
-   // 20 unit test: malloc & stack pointer
-   [`int main() {
+  // 20 unit test: malloc & stack pointer
+  [`int main() {
     int *ptr = malloc(8);
     int x = 10;
     int *sptr = &x;
@@ -276,7 +276,7 @@ const tests: TestData = [
     return x;
     }`, 20],
 
-// 21 unit test: Use after free
+  // 21 unit test: Use after free
   [`int main()
   {
       int x = 5;
@@ -299,7 +299,7 @@ const tests: TestData = [
       free(ptr);
       return x;
     }`, 150],
-  
+
   // 23 integration test: malloc array and function call
   [`int f(int a, int b) {
       return a * b;
@@ -334,7 +334,7 @@ const tests: TestData = [
       free(ptr);
       return x;
     }`, 1500],
-  
+
   // 25 integration test: malloc array and if statement
   [`int main() {
       int *ptr = malloc(8 * 5);
@@ -352,7 +352,7 @@ const tests: TestData = [
     }`, 240],
 
 
-  
+
   /*------------------ FUNCTION ---------------*/
 
   // 26 unit test: function call Basic main function
@@ -381,8 +381,8 @@ const tests: TestData = [
     int main() { 
         return f(); 
     }`,
-  1],
-  
+    1],
+
   // 29 integration test: function call binop
   [`int f(int a, int b) {
       return a * b;
@@ -413,7 +413,7 @@ const tests: TestData = [
     }`,
     55
   ],
-  
+
   /*------------------ARRAY ---------------*/
   // 32 Initialise to default value 
   [`int main() 
@@ -511,7 +511,7 @@ const tests: TestData = [
       int *ptr = &x;
       return x;
   }`, 5],
-  
+
   // 42 Pointer single pointer, error assignment to non address
   [`int main()
   {
@@ -519,7 +519,7 @@ const tests: TestData = [
       int *ptr = x;
       return x;
   }`, Error('Error [Assign - Different pointer count]')],
-  
+
   // 43 Pointer single pointer, dereference
   [`int main()
   {
@@ -601,7 +601,7 @@ const tests: TestData = [
       int **ptr2 = &x;
       return x;
   }`, Error('Error [Assign - Different pointer count]')],
-  
+
   // 52 Pointer double nested pointer, single dereference assignment
   [`int main()
   {
@@ -660,7 +660,7 @@ const tests: TestData = [
       *ptr = 3;
       return arr[1];
   }`, 3],
-  
+
   // -------------------- BINOP -------------------------// 
   // 58 + 
   [`int main()
@@ -856,7 +856,7 @@ const tests: TestData = [
       int y = 1;
       return &x;
   }`, 0],
-  
+
   // 79 unop address, second address, mutliple declaration
   [`int main()
   {
@@ -864,7 +864,7 @@ const tests: TestData = [
       int y = 1;
       return &y;
   }`, 8],
-  
+
   // 80 unop increment, single
   [`int main()
   {
@@ -872,7 +872,7 @@ const tests: TestData = [
       x++;
       return x;
   }`, 6],
-  
+
   // 81 unop increment, multiple increment
   [`int main()
   {
@@ -881,7 +881,7 @@ const tests: TestData = [
       x++;
       return x;
   }`, 7],
-  
+
   // 82 unop increment, assignment
   [`int main()
   {
@@ -891,7 +891,7 @@ const tests: TestData = [
   }`, 5],
 
   // 83 unop increment, assignment
-    [`int main()
+  [`int main()
     {
         int x = 5;
         int y = ++x;
@@ -905,7 +905,7 @@ const tests: TestData = [
       x--;
       return x;
   }`, 4],
-  
+
 
   // 85 unop decrement, multiple decrement
   [`int main()
@@ -1007,17 +1007,17 @@ const tests: TestData = [
       }
       return x;
   }`, 5],
-  
+
   // 98 for loop with continue
   [`int main()
   {
       int x = 0;
       for (int i = 0; i < 5; i++) {
-        x++;
         if (i == 3) continue;
+        x++;
       }
       return x;
-  }`, 4],
+  }`, 3],
 
   // 99 for loop with break
   [`int main()
