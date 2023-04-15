@@ -34,8 +34,6 @@ To use the interpreter, follow the steps below:
 Here is an example of the interpreter in action:
 ![Screenshot of Interpreter](./images/Fib.png)
 
-## Features
-
 ## Testing
 
 There are multiple ways to test our interpreter.
